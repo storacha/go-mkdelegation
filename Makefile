@@ -1,4 +1,4 @@
-.PHONY: build run run install
+.PHONY: build run clean install test
 
 # Variables
 BINARY_NAME=mkdelegation
@@ -29,6 +29,9 @@ gen-js:
 	@echo "Generating JavaScript client..."
 	@node mkdelegation.js
 
+
+test:
+	@${GO} test -v ./...
 
 # Default target
 default: build

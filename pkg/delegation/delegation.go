@@ -1,7 +1,10 @@
 package delegation
 
 import (
+	"encoding/base64"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multibase"
@@ -17,7 +20,7 @@ import (
 
 // DelegateIndexingToUpload creates a delegation from indexing service to upload service
 func DelegateIndexingToUpload(indexer, upload principal.Signer) (delegation.Delegation, error) {
-	return mkDelegation(indexer, upload, assert.IndexAbility, assert.EqualsAbility)
+	return mkDelegation(indexer, upload, assert.EqualsAbility, assert.IndexAbility)
 }
 
 // DelegateStorageToUpload creates a delegation from storage provider to upload service
@@ -44,6 +47,7 @@ func mkDelegation(issuer, audience principal.Signer, capabilities ...string) (de
 		issuer,
 		audience,
 		uc,
+		delegation.WithNoExpiration(),
 	)
 }
 
@@ -67,4 +71,90 @@ func FormatDelegation(archive []byte) (string, error) {
 	}
 
 	return str, nil
+}
+
+// CapabilityInfo represents a capability in a delegation
+type CapabilityInfo struct {
+	With string `json:"with"`
+	Can  string `json:"can"`
+}
+
+// DelegationInfo represents the structured information about a delegation
+type DelegationInfo struct {
+	Issuer       string                   `json:"issuer"`
+	Audience     string                   `json:"audience"`
+	Version      string                   `json:"version"`
+	Expiration   interface{}              `json:"expiration"`       // Can be nil or an int64
+	NotBefore    interface{}              `json:"notBefore"`        // Can be nil or an int64
+	Nonce        interface{}              `json:"nonce,omitempty"`  // Can be nil or string
+	Proofs       interface{}              `json:"proofs,omitempty"` // Complex type from ucan library
+	Signature    []byte                   `json:"signature"`
+	Capabilities []CapabilityInfo         `json:"capabilities"`
+	Facts        []map[string]interface{} `json:"facts,omitempty"`
+}
+
+// ParseDelegationContent parses delegation content from a string and returns information about it
+func ParseDelegationContent(content string) (*DelegationInfo, error) {
+	// Trim any whitespace
+	content = strings.TrimSpace(content)
+
+	// Parse the delegation using go-ucanto library
+	deleg, err := delegation.Parse(content)
+	if err != nil {
+		// If parsing fails, try to decode it from base64 first
+		decoded, err := base64.StdEncoding.DecodeString(content)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode base64 content: %w", err)
+		}
+
+		deleg, err = delegation.Parse(string(decoded))
+		if err != nil {
+			return nil, fmt.Errorf("failed to import delegation from decoded content: %w", err)
+		}
+	}
+
+	// Build result struct with details
+	result := &DelegationInfo{
+		Issuer:     deleg.Issuer().DID().String(),
+		Audience:   deleg.Audience().DID().String(),
+		Version:    deleg.Version(),
+		Expiration: deleg.Expiration(),
+		NotBefore:  deleg.NotBefore(),
+		Nonce:      deleg.Nonce(),
+		Proofs:     deleg.Proofs(),
+		Signature:  deleg.Signature().Bytes(),
+	}
+
+	// Extract capabilities
+	for _, c := range deleg.Capabilities() {
+		capInfo := CapabilityInfo{
+			With: c.With(),
+			Can:  c.Can(),
+		}
+		result.Capabilities = append(result.Capabilities, capInfo)
+	}
+
+	// Extract facts
+	for _, f := range deleg.Facts() {
+		result.Facts = append(result.Facts, f)
+	}
+
+	return result, nil
+}
+
+// ParseDelegation reads a delegation from a file and returns information about it
+func ParseDelegation(filePath string) (*DelegationInfo, error) {
+	// Read the file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read delegation file: %w", err)
+	}
+
+	return ParseDelegationContent(string(data))
+}
+
+// ParseDelegationFromFile is a helper function that reads a single delegation file
+// and returns detailed information about it
+func ParseDelegationFromFile(filePath string) (*DelegationInfo, error) {
+	return ParseDelegation(filePath)
 }
