@@ -66,13 +66,7 @@ The tool will output the exact paths where files have been saved.
 ### Building
 
 ```bash
-go build -o go-mkdelegation
-```
-
-### Testing
-
-```bash
-go test ./...
+make build
 ```
 
 ## License
