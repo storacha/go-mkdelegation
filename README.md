@@ -2,6 +2,14 @@
 
 A Go implementation of UCAN delegation tools for Storacha network services.
 
+## Quick Start
+
+If you'd just like to generate a set of delegations quickly, you can use `go run`:
+
+```bash
+go run github.com/storacha/go-mkdelegation@latest gen
+```
+
 ## Overview
 
 `go-mkdelegation` is a command-line tool for creating and parsing UCAN delegations between various services in the Storacha network. It's a Go port of the original JavaScript implementation.
