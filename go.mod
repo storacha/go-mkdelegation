@@ -8,8 +8,8 @@ require (
 	github.com/multiformats/go-multicodec v0.9.0
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/storacha/go-libstoracha v0.0.2
-	github.com/storacha/go-ucanto v0.3.1
+	github.com/storacha/go-libstoracha v0.0.4
+	github.com/storacha/go-ucanto v0.3.2
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v2 v2.27.6
 )
