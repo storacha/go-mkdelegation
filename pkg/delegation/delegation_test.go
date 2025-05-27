@@ -6,6 +6,7 @@ import (
 
 	capassert "github.com/storacha/go-libstoracha/capabilities/assert"
 	capblob "github.com/storacha/go-libstoracha/capabilities/blob"
+	capreplica "github.com/storacha/go-libstoracha/capabilities/blob/replica"
 	capclaim "github.com/storacha/go-libstoracha/capabilities/claim"
 
 	ed25519 "github.com/storacha/go-ucanto/principal/ed25519/signer"
@@ -67,6 +68,7 @@ func TestDelegationRoundTrip(t *testing.T) {
 			expectedCaps: []string{
 				capblob.AllocateAbility,
 				capblob.AcceptAbility,
+				capreplica.AllocateAbility,
 			},
 		},
 		{
