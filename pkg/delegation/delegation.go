@@ -12,6 +12,7 @@ import (
 	"github.com/multiformats/go-multihash"
 	"github.com/storacha/go-libstoracha/capabilities/assert"
 	"github.com/storacha/go-libstoracha/capabilities/blob"
+	"github.com/storacha/go-libstoracha/capabilities/blob/replica"
 	"github.com/storacha/go-libstoracha/capabilities/claim"
 	"github.com/storacha/go-ucanto/core/delegation"
 	"github.com/storacha/go-ucanto/principal"
@@ -25,7 +26,7 @@ func DelegateIndexingToUpload(indexer, upload principal.Signer) (delegation.Dele
 
 // DelegateStorageToUpload creates a delegation from storage provider to upload service
 func DelegateStorageToUpload(storage, upload principal.Signer) (delegation.Delegation, error) {
-	return mkDelegation(storage, upload, blob.AllocateAbility, blob.AcceptAbility)
+	return mkDelegation(storage, upload, blob.AllocateAbility, blob.AcceptAbility, replica.AllocateAbility)
 }
 
 // DelegateIndexingToStorage creates a delegation from indexing service to storage provider
