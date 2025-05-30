@@ -30,11 +30,11 @@ func DelegateStorageToUpload(storage, upload principal.Signer) (delegation.Deleg
 }
 
 // DelegateIndexingToStorage creates a delegation from indexing service to storage provider
-func DelegateIndexingToStorage(indexer, storage principal.Signer) (delegation.Delegation, error) {
+func DelegateIndexingToStorage(indexer ucan.Signer, storage ucan.Principal) (delegation.Delegation, error) {
 	return mkDelegation(indexer, storage, claim.CacheAbility)
 }
 
-func mkDelegation(issuer, audience principal.Signer, capabilities ...string) (delegation.Delegation, error) {
+func mkDelegation(issuer ucan.Signer, audience ucan.Principal, capabilities ...string) (delegation.Delegation, error) {
 	uc := make([]ucan.Capability[ucan.NoCaveats], len(capabilities))
 	for i, capability := range capabilities {
 		uc[i] = ucan.NewCapability(
@@ -85,9 +85,9 @@ type DelegationInfo struct {
 	Issuer       string                   `json:"issuer"`
 	Audience     string                   `json:"audience"`
 	Version      string                   `json:"version"`
-	Expiration   interface{}              `json:"expiration"`       // Can be nil or an int64
-	NotBefore    interface{}              `json:"notBefore"`        // Can be nil or an int64
-	Nonce        interface{}              `json:"nonce,omitempty"`  // Can be nil or string
+	Expiration   int              		  `json:"expiration"`       // Can be nil or an int
+	NotBefore    int                      `json:"notBefore"`        // Can be nil or an int
+	Nonce        string                   `json:"nonce,omitempty"`  // Can be nil or string
 	Proofs       interface{}              `json:"proofs,omitempty"` // Complex type from ucan library
 	Signature    []byte                   `json:"signature"`
 	Capabilities []CapabilityInfo         `json:"capabilities"`
@@ -114,12 +114,16 @@ func ParseDelegationContent(content string) (*DelegationInfo, error) {
 		}
 	}
 
-	// Build result struct with details
+	expiration := int(0)
+	if deleg.Expiration() != nil {
+		expiration = *deleg.Expiration()
+	}
+	// Build result struct with detail
 	result := &DelegationInfo{
 		Issuer:     deleg.Issuer().DID().String(),
 		Audience:   deleg.Audience().DID().String(),
 		Version:    deleg.Version(),
-		Expiration: deleg.Expiration(),
+		Expiration: expiration,
 		NotBefore:  deleg.NotBefore(),
 		Nonce:      deleg.Nonce(),
 		Proofs:     deleg.Proofs(),
