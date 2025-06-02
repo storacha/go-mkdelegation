@@ -13,6 +13,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 
+	"github.com/storacha/go-ucanto/principal"
 	ed25519 "github.com/storacha/go-ucanto/principal/ed25519/signer"
 
 	"github.com/storacha/go-mkdelegation/pkg/delegation"
@@ -45,6 +46,21 @@ func main() {
 				Aliases: []string{"g"},
 				Usage:   "Generate UCAN delegations for various service interactions",
 				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "upload-service-private-key",
+						Aliases: []string{"u"},
+						Usage:   "Multibase base64pad encoded Ed25519 private key of the Upload Service",
+					},
+					&cli.StringFlag{
+						Name:    "indexing-service-private-key",
+						Aliases: []string{"i"},
+						Usage:   "Multibase base64pad encoded Ed25519 private key of the Indexing Service",
+					},
+					&cli.StringFlag{
+						Name:    "storage-node-private-key",
+						Aliases: []string{"n"},
+						Usage:   "Multibase base64pad encoded Ed25519 private key of the Storage Node",
+					},
 					&cli.BoolFlag{
 						Name:    "json",
 						Aliases: []string{"j"},
@@ -91,15 +107,15 @@ func mkDelegation(cctx *cli.Context) error {
 		return fmt.Errorf("the --save and --json flags cannot be used together")
 	}
 
-	uploadService, err := ed25519.Generate()
+	uploadService, err := parseOrGenerateSigner(cctx.String("upload-service-private-key"))
 	if err != nil {
 		return err
 	}
-	indexerService, err := ed25519.Generate()
+	indexerService, err := parseOrGenerateSigner(cctx.String("indexing-service-private-key"))
 	if err != nil {
 		return err
 	}
-	storageNode, err := ed25519.Generate()
+	storageNode, err := parseOrGenerateSigner(cctx.String("storage-node-private-key"))
 	if err != nil {
 		return err
 	}
@@ -204,6 +220,15 @@ func mkDelegation(cctx *cli.Context) error {
 
 }
 
+// parseOrGenerateSigner attempts to parse the provided private key or generates
+// a new key if it is the empty string.
+func parseOrGenerateSigner(sk string) (principal.Signer, error) {
+	if sk == "" {
+		return ed25519.Generate()
+	}
+	return ed25519.Parse(sk)
+}
+
 // writeJSONToFile outputs all data in JSON format to a file in a timestamped directory
 func writeJSONToFile(uploadDID, uploadKey, indexerDID, indexerKey, storageDID, storageKey, iub64, isb64, sub64 string) error {
 	data := OutputData{
@@ -243,7 +268,7 @@ func writeJSONToFile(uploadDID, uploadKey, indexerDID, indexerKey, storageDID, s
 	return nil
 }
 
-// writeDelegationsToFiles writes delegations to individual files with timestamped directory 
+// writeDelegationsToFiles writes delegations to individual files with timestamped directory
 // and returns information about where files were written
 func writeDelegationsToFiles(iub64, isb64, sub64 string) error {
 	// Create a timestamped directory name to avoid overwriting

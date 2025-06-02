@@ -33,6 +33,12 @@ The `gen` command generates delegations between three services:
 - Indexer Service
 - Storage Node
 
+#### Input Options
+
+The `gen` command provides these input options:
+
+- **Known private key(s)**:  Use `--upload-service-private-key` (or `-u`), `--indexing-service-private-key` (or `-i`) and `--storage-node-private-key` (or `-n`) to specify Ed25519 private key(s) in multibase base64pad format.
+
 #### Output Options
 
 The `gen` command provides these output options:
@@ -66,6 +72,14 @@ Delegations saved to:
 Save all data in JSON format:
 ```bash
 mkdelegation gen --json
+```
+
+Generate delegations with specified private keys:
+```bash
+mkdelegation gen \
+--upload-service-private-key Mg... \
+--indexing-service-private-key Mg... \
+--storage-node-private-key Mg...
 ```
 
 ### Parse Command
