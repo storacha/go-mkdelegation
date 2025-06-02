@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -369,32 +370,8 @@ func parseDelegation(cctx *cli.Context) error {
 	table.Append([]string{"Nonce", fmt.Sprintf("%v", info.Nonce)})
 	table.Append([]string{"Proofs", fmt.Sprintf("%v", info.Proofs)})
 	table.Append([]string{"Signature (b64)", base64.StdEncoding.EncodeToString(info.Signature)})
-
-	// Handle expiration which may be nil or of different types
-	var expValue string
-	if exp, ok := info.Expiration.(int64); ok && exp > 0 {
-		expTime := time.Unix(exp, 0)
-		expValue = expTime.Format(time.RFC3339)
-	} else if exp, ok := info.Expiration.(float64); ok && exp > 0 {
-		expTime := time.Unix(int64(exp), 0)
-		expValue = expTime.Format(time.RFC3339)
-	} else {
-		expValue = "No expiration"
-	}
-	table.Append([]string{"Expiration", expValue})
-
-	// Handle not-before which may be nil or of different types
-	var nbfValue string
-	if nbf, ok := info.NotBefore.(int64); ok && nbf > 0 {
-		nbfTime := time.Unix(nbf, 0)
-		nbfValue = nbfTime.Format(time.RFC3339)
-	} else if nbf, ok := info.NotBefore.(float64); ok && nbf > 0 {
-		nbfTime := time.Unix(int64(nbf), 0)
-		nbfValue = nbfTime.Format(time.RFC3339)
-	} else {
-		nbfValue = "No not-before time"
-	}
-	table.Append([]string{"Not Before", nbfValue})
+	table.Append([]string{"Expiration", strconv.Itoa(info.Expiration)})
+	table.Append([]string{"Not Before", strconv.Itoa(info.NotBefore)})
 
 	// Create capabilities table as a subtable
 	var capTable string
