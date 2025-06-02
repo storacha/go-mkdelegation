@@ -85,9 +85,9 @@ type DelegationInfo struct {
 	Issuer       string                   `json:"issuer"`
 	Audience     string                   `json:"audience"`
 	Version      string                   `json:"version"`
-	Expiration   int              		  `json:"expiration"`       // Can be nil or an int
-	NotBefore    int                      `json:"notBefore"`        // Can be nil or an int
-	Nonce        string                   `json:"nonce,omitempty"`  // Can be nil or string
+	Expiration   *int                     `json:"expiration,omitempty"` // Can be nil or an int
+	NotBefore    int                      `json:"notBefore"`
+	Nonce        string                   `json:"nonce,omitempty"`
 	Proofs       interface{}              `json:"proofs,omitempty"` // Complex type from ucan library
 	Signature    []byte                   `json:"signature"`
 	Capabilities []CapabilityInfo         `json:"capabilities"`
@@ -114,16 +114,12 @@ func ParseDelegationContent(content string) (*DelegationInfo, error) {
 		}
 	}
 
-	expiration := int(0)
-	if deleg.Expiration() != nil {
-		expiration = *deleg.Expiration()
-	}
 	// Build result struct with detail
 	result := &DelegationInfo{
 		Issuer:     deleg.Issuer().DID().String(),
 		Audience:   deleg.Audience().DID().String(),
 		Version:    deleg.Version(),
-		Expiration: expiration,
+		Expiration: deleg.Expiration(),
 		NotBefore:  deleg.NotBefore(),
 		Nonce:      deleg.Nonce(),
 		Proofs:     deleg.Proofs(),
