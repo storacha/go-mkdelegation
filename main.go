@@ -381,7 +381,9 @@ func parseDelegation(cctx *cli.Context) error {
 	table.Append([]string{"Nonce", fmt.Sprintf("%v", info.Nonce)})
 	table.Append([]string{"Proofs", fmt.Sprintf("%v", info.Proofs)})
 	table.Append([]string{"Signature (b64)", base64.StdEncoding.EncodeToString(info.Signature)})
-	table.Append([]string{"Expiration", strconv.Itoa(info.Expiration)})
+	if info.Expiration != nil {
+		table.Append([]string{"Expiration", strconv.Itoa(*info.Expiration)})
+	}
 	table.Append([]string{"Not Before", strconv.Itoa(info.NotBefore)})
 
 	// Create capabilities table as a subtable
