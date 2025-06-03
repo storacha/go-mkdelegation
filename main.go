@@ -1,18 +1,23 @@
 package main
 
 import (
+	crypto_ed25519 "crypto/ed25519"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 
+	"github.com/storacha/go-ucanto/principal"
 	ed25519 "github.com/storacha/go-ucanto/principal/ed25519/signer"
 
 	"github.com/storacha/go-mkdelegation/pkg/delegation"
@@ -45,6 +50,24 @@ func main() {
 				Aliases: []string{"g"},
 				Usage:   "Generate UCAN delegations for various service interactions",
 				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:      "upload-service-private-key",
+						Aliases:   []string{"u"},
+						Usage:     "Path to PEM encoded Ed25519 private key of the Upload Service",
+						TakesFile: true,
+					},
+					&cli.StringFlag{
+						Name:      "indexing-service-private-key",
+						Aliases:   []string{"i"},
+						Usage:     "Path to PEM encoded Ed25519 private key of the Indexing Service",
+						TakesFile: true,
+					},
+					&cli.StringFlag{
+						Name:      "storage-node-private-key",
+						Aliases:   []string{"n"},
+						Usage:     "Path to PEM encoded Ed25519 private key of the Storage Node",
+						TakesFile: true,
+					},
 					&cli.BoolFlag{
 						Name:    "json",
 						Aliases: []string{"j"},
@@ -91,15 +114,15 @@ func mkDelegation(cctx *cli.Context) error {
 		return fmt.Errorf("the --save and --json flags cannot be used together")
 	}
 
-	uploadService, err := ed25519.Generate()
+	uploadService, err := parseOrGenerateSigner(cctx.String("upload-service-private-key"))
 	if err != nil {
 		return err
 	}
-	indexerService, err := ed25519.Generate()
+	indexerService, err := parseOrGenerateSigner(cctx.String("indexing-service-private-key"))
 	if err != nil {
 		return err
 	}
-	storageNode, err := ed25519.Generate()
+	storageNode, err := parseOrGenerateSigner(cctx.String("storage-node-private-key"))
 	if err != nil {
 		return err
 	}
@@ -204,6 +227,20 @@ func mkDelegation(cctx *cli.Context) error {
 
 }
 
+// parseOrGenerateSigner attempts to read and parse the private key from the
+// provided path or generates a new key if it is the empty string.
+func parseOrGenerateSigner(path string) (principal.Signer, error) {
+	if path == "" {
+		return ed25519.Generate()
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("opening file: %w", err)
+	}
+	defer f.Close()
+	return parsePrivateKeyPEM(f)
+}
+
 // writeJSONToFile outputs all data in JSON format to a file in a timestamped directory
 func writeJSONToFile(uploadDID, uploadKey, indexerDID, indexerKey, storageDID, storageKey, iub64, isb64, sub64 string) error {
 	data := OutputData{
@@ -243,7 +280,7 @@ func writeJSONToFile(uploadDID, uploadKey, indexerDID, indexerKey, storageDID, s
 	return nil
 }
 
-// writeDelegationsToFiles writes delegations to individual files with timestamped directory 
+// writeDelegationsToFiles writes delegations to individual files with timestamped directory
 // and returns information about where files were written
 func writeDelegationsToFiles(iub64, isb64, sub64 string) error {
 	// Create a timestamped directory name to avoid overwriting
@@ -344,32 +381,8 @@ func parseDelegation(cctx *cli.Context) error {
 	table.Append([]string{"Nonce", fmt.Sprintf("%v", info.Nonce)})
 	table.Append([]string{"Proofs", fmt.Sprintf("%v", info.Proofs)})
 	table.Append([]string{"Signature (b64)", base64.StdEncoding.EncodeToString(info.Signature)})
-
-	// Handle expiration which may be nil or of different types
-	var expValue string
-	if exp, ok := info.Expiration.(int64); ok && exp > 0 {
-		expTime := time.Unix(exp, 0)
-		expValue = expTime.Format(time.RFC3339)
-	} else if exp, ok := info.Expiration.(float64); ok && exp > 0 {
-		expTime := time.Unix(int64(exp), 0)
-		expValue = expTime.Format(time.RFC3339)
-	} else {
-		expValue = "No expiration"
-	}
-	table.Append([]string{"Expiration", expValue})
-
-	// Handle not-before which may be nil or of different types
-	var nbfValue string
-	if nbf, ok := info.NotBefore.(int64); ok && nbf > 0 {
-		nbfTime := time.Unix(nbf, 0)
-		nbfValue = nbfTime.Format(time.RFC3339)
-	} else if nbf, ok := info.NotBefore.(float64); ok && nbf > 0 {
-		nbfTime := time.Unix(int64(nbf), 0)
-		nbfValue = nbfTime.Format(time.RFC3339)
-	} else {
-		nbfValue = "No not-before time"
-	}
-	table.Append([]string{"Not Before", nbfValue})
+	table.Append([]string{"Expiration", strconv.Itoa(info.Expiration)})
+	table.Append([]string{"Not Before", strconv.Itoa(info.NotBefore)})
 
 	// Create capabilities table as a subtable
 	var capTable string
@@ -422,4 +435,44 @@ func parseDelegation(cctx *cli.Context) error {
 	fmt.Println(tableString.String())
 
 	return nil
+}
+
+func parsePrivateKeyPEM(f io.Reader) (principal.Signer, error) {
+	pemData, err := io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("reading private key: %w", err)
+	}
+	var privateKey *crypto_ed25519.PrivateKey
+	rest := pemData
+
+	// Loop until no more blocks
+	for {
+		block, remaining := pem.Decode(rest)
+		if block == nil {
+			// No more PEM blocks
+			break
+		}
+		rest = remaining
+
+		// Look for "PRIVATE KEY"
+		if block.Type == "PRIVATE KEY" {
+			parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse PKCS#8 private key: %w", err)
+			}
+
+			// We expect a ed25519 private key, cast it
+			key, ok := parsedKey.(crypto_ed25519.PrivateKey)
+			if !ok {
+				return nil, fmt.Errorf("the parsed key is not an ED25519 private key")
+			}
+			privateKey = &key
+			break
+		}
+	}
+
+	if privateKey == nil {
+		return nil, fmt.Errorf("could not find a PRIVATE KEY block in the PEM file")
+	}
+	return ed25519.FromRaw(*privateKey)
 }
