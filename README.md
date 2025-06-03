@@ -37,7 +37,7 @@ The `gen` command generates delegations between three services:
 
 The `gen` command provides these input options:
 
-- **Known private key(s)**:  Use `--upload-service-private-key` (or `-u`), `--indexing-service-private-key` (or `-i`) and `--storage-node-private-key` (or `-n`) to specify Ed25519 private key(s) in multibase base64pad format.
+- **Known private key(s)**:  Use `--upload-service-private-key` (or `-u`), `--indexing-service-private-key` (or `-i`) and `--storage-node-private-key` (or `-n`) to specify paths to Ed25519 private key(s) (PEM format).
 
 #### Output Options
 
@@ -77,9 +77,9 @@ mkdelegation gen --json
 Generate delegations with specified private keys:
 ```bash
 mkdelegation gen \
---upload-service-private-key Mg... \
---indexing-service-private-key Mg... \
---storage-node-private-key Mg...
+--upload-service-private-key up-svc-id.pem \
+--indexing-service-private-key idx-svc-id.pem \
+--storage-node-private-key stor-node-id.pem
 ```
 
 ### Parse Command

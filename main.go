@@ -1,8 +1,11 @@
 package main
 
 import (
+	crypto_ed25519 "crypto/ed25519"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
@@ -48,19 +51,22 @@ func main() {
 				Usage:   "Generate UCAN delegations for various service interactions",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:    "upload-service-private-key",
-						Aliases: []string{"u"},
-						Usage:   "Multibase base64pad encoded Ed25519 private key of the Upload Service",
+						Name:      "upload-service-private-key",
+						Aliases:   []string{"u"},
+						Usage:     "Path to PEM encoded Ed25519 private key of the Upload Service",
+						TakesFile: true,
 					},
 					&cli.StringFlag{
-						Name:    "indexing-service-private-key",
-						Aliases: []string{"i"},
-						Usage:   "Multibase base64pad encoded Ed25519 private key of the Indexing Service",
+						Name:      "indexing-service-private-key",
+						Aliases:   []string{"i"},
+						Usage:     "Path to PEM encoded Ed25519 private key of the Indexing Service",
+						TakesFile: true,
 					},
 					&cli.StringFlag{
-						Name:    "storage-node-private-key",
-						Aliases: []string{"n"},
-						Usage:   "Multibase base64pad encoded Ed25519 private key of the Storage Node",
+						Name:      "storage-node-private-key",
+						Aliases:   []string{"n"},
+						Usage:     "Path to PEM encoded Ed25519 private key of the Storage Node",
+						TakesFile: true,
 					},
 					&cli.BoolFlag{
 						Name:    "json",
@@ -221,13 +227,18 @@ func mkDelegation(cctx *cli.Context) error {
 
 }
 
-// parseOrGenerateSigner attempts to parse the provided private key or generates
-// a new key if it is the empty string.
-func parseOrGenerateSigner(sk string) (principal.Signer, error) {
-	if sk == "" {
+// parseOrGenerateSigner attempts to read and parse the private key from the
+// provided path or generates a new key if it is the empty string.
+func parseOrGenerateSigner(path string) (principal.Signer, error) {
+	if path == "" {
 		return ed25519.Generate()
 	}
-	return ed25519.Parse(sk)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("opening file: %w", err)
+	}
+	defer f.Close()
+	return parsePrivateKeyPEM(f)
 }
 
 // writeJSONToFile outputs all data in JSON format to a file in a timestamped directory
@@ -424,4 +435,44 @@ func parseDelegation(cctx *cli.Context) error {
 	fmt.Println(tableString.String())
 
 	return nil
+}
+
+func parsePrivateKeyPEM(f io.Reader) (principal.Signer, error) {
+	pemData, err := io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("reading private key: %w", err)
+	}
+	var privateKey *crypto_ed25519.PrivateKey
+	rest := pemData
+
+	// Loop until no more blocks
+	for {
+		block, remaining := pem.Decode(rest)
+		if block == nil {
+			// No more PEM blocks
+			break
+		}
+		rest = remaining
+
+		// Look for "PRIVATE KEY"
+		if block.Type == "PRIVATE KEY" {
+			parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse PKCS#8 private key: %w", err)
+			}
+
+			// We expect a ed25519 private key, cast it
+			key, ok := parsedKey.(crypto_ed25519.PrivateKey)
+			if !ok {
+				return nil, fmt.Errorf("the parsed key is not an ED25519 private key")
+			}
+			privateKey = &key
+			break
+		}
+	}
+
+	if privateKey == nil {
+		return nil, fmt.Errorf("could not find a PRIVATE KEY block in the PEM file")
+	}
+	return ed25519.FromRaw(*privateKey)
 }
