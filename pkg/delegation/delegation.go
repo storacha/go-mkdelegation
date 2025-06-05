@@ -14,6 +14,7 @@ import (
 	"github.com/storacha/go-libstoracha/capabilities/blob"
 	"github.com/storacha/go-libstoracha/capabilities/blob/replica"
 	"github.com/storacha/go-libstoracha/capabilities/claim"
+	"github.com/storacha/go-ucanto/core/dag/blockstore"
 	"github.com/storacha/go-ucanto/core/delegation"
 	"github.com/storacha/go-ucanto/principal"
 	"github.com/storacha/go-ucanto/ucan"
@@ -21,20 +22,59 @@ import (
 
 // DelegateIndexingToUpload creates a delegation from indexing service to upload service
 func DelegateIndexingToUpload(indexer, upload principal.Signer) (delegation.Delegation, error) {
-	return mkDelegation(indexer, upload, assert.EqualsAbility, assert.IndexAbility)
+	return mkDelegation(
+		indexer,
+		upload,
+		[]string{
+			assert.EqualsAbility,
+			assert.IndexAbility,
+		},
+		delegation.WithNoExpiration(),
+	)
 }
 
 // DelegateStorageToUpload creates a delegation from storage provider to upload service
 func DelegateStorageToUpload(storage, upload principal.Signer) (delegation.Delegation, error) {
-	return mkDelegation(storage, upload, blob.AllocateAbility, blob.AcceptAbility, replica.AllocateAbility)
+	return mkDelegation(
+		storage,
+		upload,
+		[]string{blob.AllocateAbility,
+			blob.AcceptAbility,
+			replica.AllocateAbility,
+		},
+		delegation.WithNoExpiration(),
+	)
 }
 
 // DelegateIndexingToStorage creates a delegation from indexing service to storage provider
 func DelegateIndexingToStorage(indexer ucan.Signer, storage ucan.Principal) (delegation.Delegation, error) {
-	return mkDelegation(indexer, storage, claim.CacheAbility)
+	return mkDelegation(
+		indexer,
+		storage,
+		[]string{
+			claim.CacheAbility,
+		},
+		delegation.WithNoExpiration(),
+	)
 }
 
-func mkDelegation(issuer ucan.Signer, audience ucan.Principal, capabilities ...string) (delegation.Delegation, error) {
+func DelegateIndexingToDelegator(indexer, delegator ucan.Signer) (delegation.Delegation, error) {
+	indexerToDelegator, err := mkDelegation(
+		indexer,
+		delegator,
+		[]string{
+			claim.CacheAbility,
+		},
+		delegation.WithNoExpiration(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create indexer to delegator delegation: %w", err)
+	}
+
+	return indexerToDelegator, nil
+}
+
+func mkDelegation(issuer ucan.Signer, audience ucan.Principal, capabilities []string, opts ...delegation.Option) (delegation.Delegation, error) {
 	uc := make([]ucan.Capability[ucan.NoCaveats], len(capabilities))
 	for i, capability := range capabilities {
 		uc[i] = ucan.NewCapability(
@@ -48,7 +88,7 @@ func mkDelegation(issuer ucan.Signer, audience ucan.Principal, capabilities ...s
 		issuer,
 		audience,
 		uc,
-		delegation.WithNoExpiration(),
+		opts...,
 	)
 }
 
@@ -82,38 +122,21 @@ type CapabilityInfo struct {
 
 // DelegationInfo represents the structured information about a delegation
 type DelegationInfo struct {
-	Issuer       string                   `json:"issuer"`
-	Audience     string                   `json:"audience"`
-	Version      string                   `json:"version"`
-	Expiration   *int                     `json:"expiration,omitempty"` // Can be nil or an int
-	NotBefore    int                      `json:"notBefore"`
-	Nonce        string                   `json:"nonce,omitempty"`
-	Proofs       interface{}              `json:"proofs,omitempty"` // Complex type from ucan library
-	Signature    []byte                   `json:"signature"`
-	Capabilities []CapabilityInfo         `json:"capabilities"`
-	Facts        []map[string]interface{} `json:"facts,omitempty"`
+	Issuer           string                   `json:"issuer"`
+	Audience         string                   `json:"audience"`
+	Version          string                   `json:"version"`
+	Expiration       *int                     `json:"expiration,omitempty"` // Can be nil or an int
+	NotBefore        int                      `json:"notBefore"`
+	Nonce            string                   `json:"nonce,omitempty"`
+	Proofs           interface{}              `json:"proofs,omitempty"`           // Complex type from ucan library
+	ProofDelegations []*DelegationInfo        `json:"proofDelegations,omitempty"` // Parsed delegations from proofs
+	Signature        []byte                   `json:"signature"`
+	Capabilities     []CapabilityInfo         `json:"capabilities"`
+	Facts            []map[string]interface{} `json:"facts,omitempty"`
 }
 
-// ParseDelegationContent parses delegation content from a string and returns information about it
-func ParseDelegationContent(content string) (*DelegationInfo, error) {
-	// Trim any whitespace
-	content = strings.TrimSpace(content)
-
-	// Parse the delegation using go-ucanto library
-	deleg, err := delegation.Parse(content)
-	if err != nil {
-		// If parsing fails, try to decode it from base64 first
-		decoded, err := base64.StdEncoding.DecodeString(content)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode base64 content: %w", err)
-		}
-
-		deleg, err = delegation.Parse(string(decoded))
-		if err != nil {
-			return nil, fmt.Errorf("failed to import delegation from decoded content: %w", err)
-		}
-	}
-
+// parseDelegationToDelegationInfo converts a ucanto delegation.Delegation to DelegationInfo
+func parseDelegationToDelegationInfo(deleg delegation.Delegation) *DelegationInfo {
 	// Build result struct with detail
 	result := &DelegationInfo{
 		Issuer:     deleg.Issuer().DID().String(),
@@ -139,6 +162,49 @@ func ParseDelegationContent(content string) (*DelegationInfo, error) {
 	for _, f := range deleg.Facts() {
 		result.Facts = append(result.Facts, f)
 	}
+
+	// Process proofs recursively
+	if len(deleg.Proofs()) > 0 {
+		br, err := blockstore.NewBlockReader(blockstore.WithBlocksIterator(deleg.Blocks()))
+		if err == nil {
+			proofs := delegation.NewProofsView(deleg.Proofs(), br)
+			for _, proof := range proofs {
+				pd, ok := proof.Delegation()
+				if !ok {
+					continue
+				}
+				// Recursively parse the delegation from the proof
+				proofDelegInfo := parseDelegationToDelegationInfo(pd)
+				result.ProofDelegations = append(result.ProofDelegations, proofDelegInfo)
+			}
+		}
+	}
+
+	return result
+}
+
+// ParseDelegationContent parses delegation content from a string and returns information about it
+func ParseDelegationContent(content string) (*DelegationInfo, error) {
+	// Trim any whitespace
+	content = strings.TrimSpace(content)
+
+	// Parse the delegation using go-ucanto library
+	deleg, err := delegation.Parse(content)
+	if err != nil {
+		// If parsing fails, try to decode it from base64 first
+		decoded, err := base64.StdEncoding.DecodeString(content)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode base64 content: %w", err)
+		}
+
+		deleg, err = delegation.Parse(string(decoded))
+		if err != nil {
+			return nil, fmt.Errorf("failed to import delegation from decoded content: %w", err)
+		}
+	}
+
+	// Use the helper function to parse delegation recursively
+	result := parseDelegationToDelegationInfo(deleg)
 
 	return result, nil
 }
