@@ -68,6 +68,11 @@ func main() {
 						Usage:     "Path to PEM encoded Ed25519 private key of the Storage Node",
 						TakesFile: true,
 					},
+					&cli.StringFlag{
+						Name:      "delegator-node-private-key",
+						Usage:     "Path to PEM encoded Ed25519 private key of the Delegator Node",
+						TakesFile: true,
+					},
 					&cli.BoolFlag{
 						Name:    "json",
 						Aliases: []string{"j"},
@@ -126,6 +131,10 @@ func mkDelegation(cctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	delegatorService, err := parseOrGenerateSigner(cctx.String("delegator-node-private-key"))
+	if err != nil {
+		return err
+	}
 	indexerToUploadDelegation, err := delegation.DelegateIndexingToUpload(indexerService, uploadService)
 	if err != nil {
 		return fmt.Errorf("failed to create indexer to upload delegation: %w", err)
@@ -137,6 +146,10 @@ func mkDelegation(cctx *cli.Context) error {
 	storageToUploadDelegation, err := delegation.DelegateStorageToUpload(storageNode, uploadService)
 	if err != nil {
 		return fmt.Errorf("failed to create storage to upload delegation: %w", err)
+	}
+	indexerToDelegatorDelegation, err := delegation.DelegateIndexingToDelegator(indexerService, delegatorService)
+	if err != nil {
+		return fmt.Errorf("failed to create indexer to delegator node delegation: %w", err)
 	}
 
 	// Format all keys for services
@@ -152,6 +165,10 @@ func mkDelegation(cctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to format storage key: %w", err)
 	}
+	delegatorKey, err := ed25519.Format(delegatorService)
+	if err != nil {
+		return fmt.Errorf("failed to format delegator key: %w", err)
+	}
 
 	// Get delegation archives and encode to base64
 	iub, err := io.ReadAll(indexerToUploadDelegation.Archive())
@@ -166,6 +183,10 @@ func mkDelegation(cctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to read storage to upload delegation: %w", err)
 	}
+	idb, err := io.ReadAll(indexerToDelegatorDelegation.Archive())
+	if err != nil {
+		return fmt.Errorf("failed to read indexer to delegator delegation: %w", err)
+	}
 
 	iub64, err := delegation.FormatDelegation(iub)
 	if err != nil {
@@ -179,10 +200,14 @@ func mkDelegation(cctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to format storage to upload delegation: %w", err)
 	}
+	idb64, err := delegation.FormatDelegation(idb)
+	if err != nil {
+		return fmt.Errorf("failed to format indexer to delegator delegation: %w", err)
+	}
 
 	// If save flag is set, write delegations to files
 	if cctx.Bool("save") {
-		if err := writeDelegationsToFiles(iub64, isb64, sub64); err != nil {
+		if err := writeDelegationsToFiles(iub64, isb64, sub64, idb64); err != nil {
 			return err
 		}
 		return nil
@@ -194,7 +219,8 @@ func mkDelegation(cctx *cli.Context) error {
 			uploadService.DID().String(), uploadKey,
 			indexerService.DID().String(), indexerKey,
 			storageNode.DID().String(), storageKey,
-			iub64, isb64, sub64,
+			delegatorService.DID().String(), delegatorKey,
+			iub64, isb64, sub64, idb64,
 		)
 	}
 
@@ -211,6 +237,7 @@ func mkDelegation(cctx *cli.Context) error {
 
 	table.Append([]string{"Upload Service", uploadService.DID().String(), uploadKey})
 	table.Append([]string{"Indexer Service", indexerService.DID().String(), indexerKey})
+	table.Append([]string{"Delegator Service", delegatorService.DID().String(), delegatorKey})
 	table.Append([]string{"Storage Node", storageNode.DID().String(), storageKey})
 
 	table.Render()
@@ -222,6 +249,7 @@ func mkDelegation(cctx *cli.Context) error {
 	fmt.Printf("Indexer → Upload\t%s\n", iub64)
 	fmt.Printf("Indexer → Storage\t%s\n", isb64)
 	fmt.Printf("Storage → Upload\t%s\n", sub64)
+	fmt.Printf("Indexer → Delegator\t%s\n", idb64)
 
 	return nil
 
@@ -242,17 +270,19 @@ func parseOrGenerateSigner(path string) (principal.Signer, error) {
 }
 
 // writeJSONToFile outputs all data in JSON format to a file in a timestamped directory
-func writeJSONToFile(uploadDID, uploadKey, indexerDID, indexerKey, storageDID, storageKey, iub64, isb64, sub64 string) error {
+func writeJSONToFile(uploadDID, uploadKey, indexerDID, indexerKey, storageDID, storageKey, delegatorDID, delegatorKey, iub64, isb64, sub64, idsb64 string) error {
 	data := OutputData{
 		Services: []ServiceInfo{
 			{Name: "Upload Service", DID: uploadDID, SecretKey: uploadKey},
 			{Name: "Indexer Service", DID: indexerDID, SecretKey: indexerKey},
+			{Name: "Delegator Service", DID: delegatorDID, SecretKey: delegatorKey},
 			{Name: "Storage Node", DID: storageDID, SecretKey: storageKey},
 		},
 		Delegations: []DelegationInfo{
 			{Path: "Indexer → Upload", UCAN: iub64},
 			{Path: "Indexer → Storage", UCAN: isb64},
 			{Path: "Storage → Upload", UCAN: sub64},
+			{Path: "Indexer → Delegator → Storage", UCAN: idsb64},
 		},
 	}
 
@@ -282,7 +312,7 @@ func writeJSONToFile(uploadDID, uploadKey, indexerDID, indexerKey, storageDID, s
 
 // writeDelegationsToFiles writes delegations to individual files with timestamped directory
 // and returns information about where files were written
-func writeDelegationsToFiles(iub64, isb64, sub64 string) error {
+func writeDelegationsToFiles(iub64, isb64, sub64, idsb64 string) error {
 	// Create a timestamped directory name to avoid overwriting
 	timestamp := time.Now().Format("20060102_150405")
 	dirPath := fmt.Sprintf("delegations_%s", timestamp)
@@ -308,13 +338,120 @@ func writeDelegationsToFiles(iub64, isb64, sub64 string) error {
 		return fmt.Errorf("failed to write storage to upload delegation: %w", err)
 	}
 
+	idsPath := fmt.Sprintf("%s/indexer-to-delegator.b64", dirPath)
+	if err := os.WriteFile(idsPath, []byte(idsb64), 0644); err != nil {
+		return fmt.Errorf("failed to write indexer to delegator delegation: %w", err)
+	}
+
 	// Print information about where files were saved
 	fmt.Printf("Delegations saved to:\n")
 	fmt.Printf("  - %s\n", iuPath)
 	fmt.Printf("  - %s\n", isPath)
 	fmt.Printf("  - %s\n", suPath)
+	fmt.Printf("  - %s\n", idsPath)
 
 	return nil
+}
+
+// formatDelegationAsTable formats a single delegation as a complete table
+func formatDelegationAsTable(info *delegation.DelegationInfo, depth int) string {
+	tableString := &strings.Builder{}
+	table := tablewriter.NewWriter(tableString)
+	table.SetHeader([]string{"Property", "Value"})
+	table.SetAutoWrapText(true)
+	table.SetAutoMergeCells(false)
+	table.SetRowLine(true)
+	table.SetColumnAlignment([]int{tablewriter.ALIGN_LEFT, tablewriter.ALIGN_LEFT})
+	table.SetColWidth(60 - (depth * 2)) // Adjust width based on nesting
+
+	// Add delegation metadata rows
+	table.Append([]string{"Issuer", info.Issuer})
+	table.Append([]string{"Audience", info.Audience})
+	table.Append([]string{"Version", info.Version})
+	table.Append([]string{"Nonce", fmt.Sprintf("%v", info.Nonce)})
+	if depth == 0 { // Only show raw proofs at top level
+		table.Append([]string{"Proofs", fmt.Sprintf("%v", info.Proofs)})
+	}
+	table.Append([]string{"Signature (b64)", base64.StdEncoding.EncodeToString(info.Signature)})
+	if info.Expiration != nil {
+		table.Append([]string{"Expiration", strconv.Itoa(*info.Expiration)})
+	}
+	table.Append([]string{"Not Before", strconv.Itoa(info.NotBefore)})
+
+	// Create capabilities table as a subtable
+	var capTable string
+	if len(info.Capabilities) > 0 {
+		capTableString := &strings.Builder{}
+		capTableWriter := tablewriter.NewWriter(capTableString)
+		capTableWriter.SetHeader([]string{"#", "Can", "With"})
+		capTableWriter.SetAutoWrapText(true)
+		capTableWriter.SetAutoMergeCells(false)
+		capTableWriter.SetRowLine(true)
+		capTableWriter.SetColumnAlignment([]int{tablewriter.ALIGN_CENTER, tablewriter.ALIGN_LEFT, tablewriter.ALIGN_LEFT})
+		capTableWriter.SetColWidth(50 - (depth * 2))
+
+		for i, capability := range info.Capabilities {
+			capTableWriter.Append([]string{fmt.Sprintf("%d", i+1), capability.Can, capability.With})
+		}
+
+		capTableWriter.Render()
+		capTable = capTableString.String()
+	} else {
+		capTable = "None"
+	}
+	table.Append([]string{"Capabilities", capTable})
+
+	// Create facts table as a subtable
+	var factTable string
+	if len(info.Facts) > 0 {
+		factTableString := &strings.Builder{}
+		factTableWriter := tablewriter.NewWriter(factTableString)
+		factTableWriter.SetHeader([]string{"#", "Fact"})
+		factTableWriter.SetAutoWrapText(true)
+		factTableWriter.SetAutoMergeCells(false)
+		factTableWriter.SetRowLine(true)
+		factTableWriter.SetColumnAlignment([]int{tablewriter.ALIGN_CENTER, tablewriter.ALIGN_LEFT})
+		factTableWriter.SetColWidth(50 - (depth * 2))
+
+		for i, f := range info.Facts {
+			factTableWriter.Append([]string{fmt.Sprintf("%d", i+1), fmt.Sprintf("%v", f)})
+		}
+
+		factTableWriter.Render()
+		factTable = factTableString.String()
+	} else {
+		factTable = "None"
+	}
+	table.Append([]string{"Facts", factTable})
+
+	// Create proof delegations table recursively
+	if len(info.ProofDelegations) > 0 {
+		proofDelegsTable := formatProofDelegations(info.ProofDelegations, depth+1)
+		table.Append([]string{"Proof Delegations", proofDelegsTable})
+	}
+
+	table.Render()
+	return tableString.String()
+}
+
+// formatProofDelegations recursively formats proof delegations as nested tables
+func formatProofDelegations(proofDelegations []*delegation.DelegationInfo, depth int) string {
+	if len(proofDelegations) == 0 {
+		return "None"
+	}
+
+	var result strings.Builder
+
+	for i, pd := range proofDelegations {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+		result.WriteString(fmt.Sprintf("\n=== Proof Delegation %d ===\n", i+1))
+		// Recursively format each proof delegation as a complete table
+		result.WriteString(formatDelegationAsTable(pd, depth))
+	}
+
+	return result.String()
 }
 
 // parseDelegation reads a delegation from a file or stdin and displays its information
@@ -364,77 +501,9 @@ func parseDelegation(cctx *cli.Context) error {
 		return nil
 	}
 
-	// Output as a nicely formatted table
-	tableString := &strings.Builder{}
-	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Property", "Value"})
-	table.SetAutoWrapText(true)
-	table.SetAutoMergeCells(false)
-	table.SetRowLine(true)
-	table.SetColumnAlignment([]int{tablewriter.ALIGN_LEFT, tablewriter.ALIGN_LEFT})
-	table.SetColWidth(80) // Set sufficient width to prevent arbitrary wrapping
-
-	// Add delegation metadata rows
-	table.Append([]string{"Issuer", info.Issuer})
-	table.Append([]string{"Audience", info.Audience})
-	table.Append([]string{"Version", info.Version})
-	table.Append([]string{"Nonce", fmt.Sprintf("%v", info.Nonce)})
-	table.Append([]string{"Proofs", fmt.Sprintf("%v", info.Proofs)})
-	table.Append([]string{"Signature (b64)", base64.StdEncoding.EncodeToString(info.Signature)})
-	if info.Expiration != nil {
-		table.Append([]string{"Expiration", strconv.Itoa(*info.Expiration)})
-	}
-	table.Append([]string{"Not Before", strconv.Itoa(info.NotBefore)})
-
-	// Create capabilities table as a subtable
-	var capTable string
-	if len(info.Capabilities) > 0 {
-		capTableString := &strings.Builder{}
-		capTableWriter := tablewriter.NewWriter(capTableString)
-		capTableWriter.SetHeader([]string{"#", "Can", "With"})
-		capTableWriter.SetAutoWrapText(true)
-		capTableWriter.SetAutoMergeCells(false)
-		capTableWriter.SetRowLine(true)
-		capTableWriter.SetColumnAlignment([]int{tablewriter.ALIGN_CENTER, tablewriter.ALIGN_LEFT, tablewriter.ALIGN_LEFT})
-		capTableWriter.SetColWidth(60)
-
-		for i, cap := range info.Capabilities {
-			capTableWriter.Append([]string{fmt.Sprintf("%d", i+1), cap.Can, cap.With})
-		}
-
-		capTableWriter.Render()
-		capTable = capTableString.String()
-	} else {
-		capTable = "None"
-	}
-	table.Append([]string{"Capabilities", capTable})
-
-	// Create facts table as a subtable
-	var factTable string
-	if len(info.Facts) > 0 {
-		factTableString := &strings.Builder{}
-		factTableWriter := tablewriter.NewWriter(factTableString)
-		factTableWriter.SetHeader([]string{"#", "Fact"})
-		factTableWriter.SetAutoWrapText(true)
-		factTableWriter.SetAutoMergeCells(false)
-		factTableWriter.SetRowLine(true)
-		factTableWriter.SetColumnAlignment([]int{tablewriter.ALIGN_CENTER, tablewriter.ALIGN_LEFT})
-		factTableWriter.SetColWidth(60)
-
-		for i, f := range info.Facts {
-			factTableWriter.Append([]string{fmt.Sprintf("%d", i+1), fmt.Sprintf("%v", f)})
-		}
-
-		factTableWriter.Render()
-		factTable = factTableString.String()
-	} else {
-		factTable = "None"
-	}
-	table.Append([]string{"Facts", factTable})
-
-	table.Render()
+	// Use the formatDelegationAsTable function to format the delegation
 	fmt.Println("Delegation Information:")
-	fmt.Println(tableString.String())
+	fmt.Println(formatDelegationAsTable(info, 0))
 
 	return nil
 }
