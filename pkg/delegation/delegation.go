@@ -3,6 +3,7 @@ package delegation
 import (
 	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -10,71 +11,12 @@ import (
 	"github.com/multiformats/go-multibase"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
-	"github.com/storacha/go-libstoracha/capabilities/assert"
-	"github.com/storacha/go-libstoracha/capabilities/blob"
-	"github.com/storacha/go-libstoracha/capabilities/blob/replica"
-	"github.com/storacha/go-libstoracha/capabilities/claim"
 	"github.com/storacha/go-ucanto/core/dag/blockstore"
 	"github.com/storacha/go-ucanto/core/delegation"
-	"github.com/storacha/go-ucanto/principal"
 	"github.com/storacha/go-ucanto/ucan"
 )
 
-// DelegateIndexingToUpload creates a delegation from indexing service to upload service
-func DelegateIndexingToUpload(indexer, upload principal.Signer) (delegation.Delegation, error) {
-	return mkDelegation(
-		indexer,
-		upload,
-		[]string{
-			assert.EqualsAbility,
-			assert.IndexAbility,
-		},
-		delegation.WithNoExpiration(),
-	)
-}
-
-// DelegateStorageToUpload creates a delegation from storage provider to upload service
-func DelegateStorageToUpload(storage, upload principal.Signer) (delegation.Delegation, error) {
-	return mkDelegation(
-		storage,
-		upload,
-		[]string{blob.AllocateAbility,
-			blob.AcceptAbility,
-			replica.AllocateAbility,
-		},
-		delegation.WithNoExpiration(),
-	)
-}
-
-// DelegateIndexingToStorage creates a delegation from indexing service to storage provider
-func DelegateIndexingToStorage(indexer ucan.Signer, storage ucan.Principal) (delegation.Delegation, error) {
-	return mkDelegation(
-		indexer,
-		storage,
-		[]string{
-			claim.CacheAbility,
-		},
-		delegation.WithNoExpiration(),
-	)
-}
-
-func DelegateIndexingToDelegator(indexer, delegator ucan.Signer) (delegation.Delegation, error) {
-	indexerToDelegator, err := mkDelegation(
-		indexer,
-		delegator,
-		[]string{
-			claim.CacheAbility,
-		},
-		delegation.WithNoExpiration(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create indexer to delegator delegation: %w", err)
-	}
-
-	return indexerToDelegator, nil
-}
-
-func mkDelegation(issuer ucan.Signer, audience ucan.Principal, capabilities []string, opts ...delegation.Option) (delegation.Delegation, error) {
+func MakeDelegation(issuer ucan.Signer, audience ucan.Principal, capabilities []string, opts ...delegation.Option) (delegation.Delegation, error) {
 	uc := make([]ucan.Capability[ucan.NoCaveats], len(capabilities))
 	for i, capability := range capabilities {
 		uc[i] = ucan.NewCapability(
@@ -92,8 +34,20 @@ func mkDelegation(issuer ucan.Signer, audience ucan.Principal, capabilities []st
 	)
 }
 
-// FormatDelegation takes a delegation archive in byte form and returns a base64-encoded link
-func FormatDelegation(archive []byte) (string, error) {
+// FormatDelegation takes a delegation archive from a read and returns a multibase-base64-encoded CIDv1 with
+// embedded CAR data.
+func FormatDelegation(d io.Reader) (string, error) {
+	db, err := io.ReadAll(d)
+	if err != nil {
+		return "", fmt.Errorf("failed to read delegation: %w", err)
+	}
+
+	return FormatDelegationBytes(db)
+}
+
+// FormatDelegationBytes takes a delegation archive in byte form and returns a multibase-base64-encoded CIDv1 with
+// embedded CAR data.
+func FormatDelegationBytes(archive []byte) (string, error) {
 	// Create identity digest of the archive
 	// The identity hash function (0x00) simply returns the input data as the hash
 	mh, err := multihash.Sum(archive, multihash.IDENTITY, -1)
