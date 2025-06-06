@@ -33,7 +33,7 @@ func TestDelegationRoundTrip(t *testing.T) {
 		{
 			name: "IndexerToUpload",
 			delegFn: func() ([]byte, error) {
-				deleg, err := DelegateIndexingToUpload(indexerService, uploadService)
+				deleg, err := MakeDelegation(indexerService, uploadService, []string{capassert.EqualsAbility, capassert.IndexAbility})
 				if err != nil {
 					return nil, err
 				}
@@ -53,7 +53,7 @@ func TestDelegationRoundTrip(t *testing.T) {
 		{
 			name: "StorageToUpload",
 			delegFn: func() ([]byte, error) {
-				deleg, err := DelegateStorageToUpload(storageNode, uploadService)
+				deleg, err := MakeDelegation(storageNode, uploadService, []string{capblob.AllocateAbility, capblob.AcceptAbility, capreplica.AllocateAbility})
 				if err != nil {
 					return nil, err
 				}
@@ -74,7 +74,7 @@ func TestDelegationRoundTrip(t *testing.T) {
 		{
 			name: "IndexerToStorage",
 			delegFn: func() ([]byte, error) {
-				deleg, err := DelegateIndexingToStorage(indexerService, storageNode)
+				deleg, err := MakeDelegation(indexerService, storageNode, []string{capclaim.CacheAbility})
 				if err != nil {
 					return nil, err
 				}
@@ -99,7 +99,7 @@ func TestDelegationRoundTrip(t *testing.T) {
 			require.NoError(t, err)
 
 			// Format as base64
-			b64, err := FormatDelegation(archiveBytes)
+			b64, err := FormatDelegationBytes(archiveBytes)
 			require.NoError(t, err)
 			assert.NotEmpty(t, b64)
 

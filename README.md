@@ -1,18 +1,19 @@
 # go-mkdelegation
 
-A Go implementation of UCAN delegation tools for Storacha network services.
+A Go implementation of UCAN (User Controlled Authorization Networks) delegation tools.
 
 ## Quick Start
 
-If you'd just like to generate a set of delegations quickly, you can use `go run`:
+Generate a UCAN delegation:
 
 ```bash
-go run github.com/storacha/go-mkdelegation@latest gen
+mkdelegation gen -i issuer-key.pem -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK -s -c "*/*"
 ```
 
 ## Overview
 
-`go-mkdelegation` is a command-line tool for creating and parsing UCAN delegations between various services in the Storacha network. It's a Go port of the original JavaScript implementation.
+`go-mkdelegation` is a command-line tool for creating and parsing UCAN delegations. 
+It allows you to generate delegations between principals with specific capabilities and parse existing delegations to inspect their contents, including recursive parsing of proof delegations.
 
 ## Installation
 
@@ -23,68 +24,79 @@ go install github.com/storacha/go-mkdelegation@latest
 ## Usage
 
 The tool supports two main commands:
-- `gen` (or `g`): Generate UCAN delegations between Storacha network services
+- `gen` (or `g`): Generate UCAN delegations with specified capabilities
 - `parse` (or `p`): Parse and display information about existing UCAN delegations
 
 ### Generate Command
 
-The `gen` command generates delegations between three services:
-- Upload Service
-- Indexer Service
-- Storage Node
+The `gen` command creates UCAN delegations from an issuer to an audience with specified capabilities.
 
-#### Input Options
+#### Required Parameters
 
-The `gen` command provides these input options:
+- **Issuer Private Key**: Use `--issuer-private-key` (or `-i`) to specify the path to an Ed25519 private key in PEM format
+- **Audience DID**: Use `--audience-did-key` (or `-a`) to specify the audience's DID (must be in did:key format)
+- **Capabilities**: Use `--capabilities` (or `-c`) to specify one or more capabilities to delegate (can be specified multiple times)
 
-- **Known private key(s)**:  Use `--upload-service-private-key` (or `-u`), `--indexing-service-private-key` (or `-i`) and `--storage-node-private-key` (or `-n`) to specify paths to Ed25519 private key(s) (PEM format).
+#### Optional Parameters
 
-#### Output Options
+- **Issuer DID Web**: Use `--issuer-did-web` (or `-w`) to wrap the issuer with a did:web identity
+- **Expiration**: Use `--expiration` (or `-e`) to set expiration time in UTC seconds since Unix epoch
+- **Skip Validation**: Use `--skip-capability-validation` (or `-s`) to skip validation of capabilities against known set
 
-The `gen` command provides these output options:
+#### Known Capabilities
 
-- **Default**: Displays service information and delegations in the console
-- **Save to files**: Use `--save` or `-s` to save delegations as individual files
-- **JSON output**: Use `--json` or `-j` to save all data in JSON format
+The tool validates capabilities against the following known Storacha service capabilities:
+- `assert/equals`, `assert/relation`, `assert/partition`, `assert/index`, `assert/inclusion`, `assert/location`
+- `blob/accept`, `blob/allocate`
+- `claim/cache`
+- `http/put`
+- `pdp/accept`, `pdp/info`
+- `space/blob/add`, `space/blob/get`, `space/blob/list`, `space/blob/remove`, `space/blob/replicate`
+- `ucan/conclude`
 
-Note: The `--save` and `--json` options cannot be used together.
+To use custom capabilities not in this list, use the `--skip-capability-validation` flag.
 
 #### Example Commands
 
-Generate delegations and display in console:
-```bash
-mkdelegation gen
-```
-
-Save delegations to individual files:
-```bash
-mkdelegation gen --save
-```
-
-Example output:
-```
-Delegations saved to:
-  - delegations_20250502_100616/indexer-to-upload.b64
-  - delegations_20250502_100616/indexer-to-storage.b64
-  - delegations_20250502_100616/storage-to-upload.b64
-```
-
-Save all data in JSON format:
-```bash
-mkdelegation gen --json
-```
-
-Generate delegations with specified private keys:
+Generate a delegation with basic capabilities:
 ```bash
 mkdelegation gen \
---upload-service-private-key up-svc-id.pem \
---indexing-service-private-key idx-svc-id.pem \
---storage-node-private-key stor-node-id.pem
+  -i issuer-key.pem \
+  -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
+  -c "blob/accept" \
+  -c "blob/allocate"
+```
+
+Generate a delegation with all capabilities (using wildcard):
+```bash
+mkdelegation gen \
+  -i issuer-key.pem \
+  -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
+  -c "*/*" \
+  -s
+```
+
+Generate a delegation with expiration:
+```bash
+mkdelegation gen \
+  -i issuer-key.pem \
+  -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
+  -c "assert/equals" \
+  -e 1735689600  # Expires on Jan 1, 2025
+```
+
+Generate a delegation with did:web issuer:
+```bash
+mkdelegation gen \
+  -i issuer-key.pem \
+  -w "did:web:example.com" \
+  -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
+  -c "http/put"
 ```
 
 ### Parse Command
 
-The `parse` command allows you to analyze existing delegations by reading from a file or stdin.
+The `parse` command allows you to analyze existing delegations by reading from a file or stdin. It supports recursive parsing of proof delegations, displaying the complete delegation chain.
 
 #### Parse Options
 
@@ -96,70 +108,86 @@ The `parse` command allows you to analyze existing delegations by reading from a
 
 Parse a delegation from a file:
 ```bash
-mkdelegation parse delegations_20250502_100616/indexer-to-upload.b64
+mkdelegation parse delegation.b64
 ```
 
-Parse a delegation from stdin (pipe):
+Parse a delegation from stdin:
 ```bash
-cat delegations_20250502_100616/indexer-to-upload.b64 | mkdelegation parse
+cat delegation.b64 | mkdelegation parse
+```
+
+Parse from a generated delegation:
+```bash
+mkdelegation gen -i key.pem -a did:key:z6Mkh... -c "blob/accept" | mkdelegation parse
 ```
 
 Parse with JSON output:
 ```bash
-mkdelegation parse --json delegations_20250502_100616/indexer-to-upload.b64
+mkdelegation parse --json delegation.b64
 ```
 
-Example output (table format):
+#### Example Output
+
+Table format (default):
 ```
 Delegation Information:
 +-----------------+----------------------------------------------------------------------------------------------+
 |    PROPERTY     |                                            VALUE                                             |
 +-----------------+----------------------------------------------------------------------------------------------+
 | Issuer          | did:key:z6MkutC5yqPcSFSiPG1dZuUL5KeP1Tgrah4kAYZ4qvx3jJ7L                                     |
-| Audience        | did:key:z6MkhaSkecxccgYqkVLsXCxUp66rMpYJty3CaoKLDZ1NfaK5                                     |
+| Audience        | did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK                                     |
 | Version         | 0.9.1                                                                                        |
 | Nonce           |                                                                                              |
-| Proofs          | []                                                                                           |
 | Signature (b64) | 7aEDQILJjvH08ZtCgS+TOznNrxUHCr6TAJxnyrT6nQiJ0sMMmHCiIxJUKDNI92OoEXgCWg/wEsiVQ+VEliAau2du9Qg= |
-| Expiration      | No expiration                                                                                |
-| Not Before      | No not-before time                                                                           |
+| Expiration      | 1735689600 (1 Jan 25 00:00 UTC)                                                             |
+| Not Before      | 0                                                                                            |
 | Capabilities    | +---+---------------+----------------------------------------------------------+             |
 |                 | | # |      CAN      |                           WITH                           |             |
 |                 | +---+---------------+----------------------------------------------------------+             |
-|                 | | 1 | assert/equals | did:key:z6MkutC5yqPcSFSiPG1dZuUL5KeP1Tgrah4kAYZ4qvx3jJ7L |             |
+|                 | | 1 | blob/accept   | did:key:z6MkutC5yqPcSFSiPG1dZuUL5KeP1Tgrah4kAYZ4qvx3jJ7L |             |
 |                 | +---+---------------+----------------------------------------------------------+             |
-|                 | | 2 | assert/index  | did:key:z6MkutC5yqPcSFSiPG1dZuUL5KeP1Tgrah4kAYZ4qvx3jJ7L |             |
+|                 | | 2 | blob/allocate | did:key:z6MkutC5yqPcSFSiPG1dZuUL5KeP1Tgrah4kAYZ4qvx3jJ7L |             |
 |                 | +---+---------------+----------------------------------------------------------+             |
 +-----------------+----------------------------------------------------------------------------------------------+
 | Facts           | None                                                                                         |
 +-----------------+----------------------------------------------------------------------------------------------+
 ```
 
-### Combining Commands
+When a delegation contains proofs (other delegations), they are parsed recursively and displayed as nested tables:
 
-You can combine the `gen` and `parse` commands to create and immediately analyze delegations:
-
-```bash
-# Generate delegations, save them, and parse one
-mkdelegation gen --save && mkdelegation parse $(find delegations_* -name "indexer-to-upload.b64" | sort | tail -1)
-
-# Generate a delegation and pipe it directly to parse (requires output extraction)
-cat $(mkdelegation gen --save | grep "indexer-to-upload" | awk '{print $3}') | mkdelegation parse
+```
+| Proof Delegations | === Proof Delegation 1 ===                                                                 |
+|                   | +-----------------+------------------------------------------------------------------------+  |
+|                   | |    PROPERTY     |                                VALUE                                 |  |
+|                   | +-----------------+------------------------------------------------------------------------+  |
+|                   | | Issuer          | did:key:z6MkqNJSEiVgztATfHBfE2bamdCxsmLm52tB8j8QWHdftDr3           |  |
+|                   | | Audience        | did:key:z6MkutC5yqPcSFSiPG1dZuUL5KeP1Tgrah4kAYZ4qvx3jJ7L           |  |
+|                   | | ...             | ...                                                                |  |
+|                   | +-----------------+------------------------------------------------------------------------+  |
 ```
 
-### Output Files
+### Output Format
 
-Files are saved to timestamped directories to prevent overwriting existing files:
+#### Base64-encoded CAR Format
 
-When using `--save` with the `gen` command, the following files are created in a directory named `delegations_YYYYMMDD_HHMMSS`:
-- `indexer-to-upload.b64`
-- `indexer-to-storage.b64`
-- `storage-to-upload.b64`
+Generated delegations are output as multibase-base64-encoded CIDv1 with embedded CAR data. This format:
+- Contains the complete delegation archive
+- Is self-describing with the CID
+- Can be parsed by any UCAN-compatible tool
+- Preserves the delegation chain including any proofs
 
-When using `--json` with the `gen` command, all data is saved to:
-- `delegations_YYYYMMDD_HHMMSS/output.json`
+### Combining Commands
 
-The tool will output the exact paths where files have been saved.
+Generate and immediately parse a delegation:
+```bash
+mkdelegation gen -i key.pem -a did:key:z6Mkh... -c "blob/accept" | mkdelegation parse
+```
+
+Save a delegation and parse it:
+```bash
+mkdelegation gen -i key.pem -a did:key:z6Mkh... -c "blob/accept" > my-delegation.b64
+mkdelegation parse my-delegation.b64
+```
 
 ## Development
 
