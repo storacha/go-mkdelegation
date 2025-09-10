@@ -5,6 +5,7 @@
 *.so
 *.dylib
 go-mkdelegation
+mkdelegation
 
 # Test binary, built with `go test -c`
 *.test
