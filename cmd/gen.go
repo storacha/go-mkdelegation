@@ -29,6 +29,7 @@ var (
 	issuerDidWebKey          string
 	audienceDidKey           string
 	capabilities             []string
+	with                     string
 	skipCapabilityValidation bool
 	expiration               int64
 )
@@ -45,16 +46,19 @@ var genCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(genCmd)
 
-	genCmd.Flags().StringVarP(&issuerPrivateKey, "issuer-private-key", "i", "", "Path to PEM encoded Ed25519 private key of delegation issuer")
+	genCmd.Flags().StringVarP(&issuerPrivateKey, "issuer-private-key", "k", "", "Path to PEM encoded Ed25519 private key of delegation issuer")
 	Must(genCmd.MarkFlagRequired("issuer-private-key"))
 
-	genCmd.Flags().StringVarP(&issuerDidWebKey, "issuer-did-web", "w", "", "Optional did:web: of issuer, when provided warps did:key: of delegation issuer")
+	genCmd.Flags().StringVarP(&issuerDidWebKey, "issuer-did-web", "i", "", "Optional did:web: of issuer, when provided warps did:key: of delegation issuer")
 
 	genCmd.Flags().StringVarP(&audienceDidKey, "audience-did-key", "a", "", "did:key of delegation audience")
 	Must(genCmd.MarkFlagRequired("audience-did-key"))
 
 	genCmd.Flags().StringArrayVarP(&capabilities, "capabilities", "c", []string{}, "list of capabilities issuer will authorize to audience")
 	Must(genCmd.MarkFlagRequired("capabilities"))
+
+	genCmd.Flags().StringVarP(&with, "with", "w", "", "Optional resource capabilities apply to. Usually a DID. If not provided, capabilities apply to issuer.")
+
 	genCmd.Flags().BoolVarP(&skipCapabilityValidation, "skip-capability-validation", "s", false, "when set skips validation of capabilities against known set of capabilities")
 	genCmd.Flags().Int64VarP(&expiration, "expiration", "e", 0, "expiration time in UTC seconds since Unix\n// epoch")
 }
@@ -84,6 +88,10 @@ func mkDelegation(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("parsing audience did key: %w", err)
 	}
 
+	if with == "" {
+		with = issuer.DID().String()
+	}
+
 	if !skipCapabilityValidation {
 		if err := validateCapability(capabilities); err != nil {
 			// TODO consider returning the list of known capabilities in the event of a failure for more discoverable UX
@@ -103,7 +111,7 @@ func mkDelegation(cmd *cobra.Command, args []string) error {
 		opts = append(opts, delegation.WithNoExpiration())
 	}
 
-	d, err := mkd.MakeDelegation(issuer, audience, capabilities, opts...)
+	d, err := mkd.MakeDelegation(issuer, audience, capabilities, with, opts...)
 	if err != nil {
 		return fmt.Errorf("making delegation: %w", err)
 	}

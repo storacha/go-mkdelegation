@@ -33,13 +33,14 @@ The `gen` command creates UCAN delegations from an issuer to an audience with sp
 
 #### Required Parameters
 
-- **Issuer Private Key**: Use `--issuer-private-key` (or `-i`) to specify the path to an Ed25519 private key in PEM format
+- **Issuer Private Key**: Use `--issuer-private-key` (or `-k`) to specify the path to an Ed25519 private key in PEM format
 - **Audience DID**: Use `--audience-did-key` (or `-a`) to specify the audience's DID (must be in did:key format)
 - **Capabilities**: Use `--capabilities` (or `-c`) to specify one or more capabilities to delegate (can be specified multiple times)
 
 #### Optional Parameters
 
-- **Issuer DID Web**: Use `--issuer-did-web` (or `-w`) to wrap the issuer with a did:web identity
+- **Issuer DID Web**: Use `--issuer-did-web` (or `-i`) to wrap the issuer with a did:web identity
+- **With**: Use `--with` (or `-w`) to specify the resource delegated capabilities apply to
 - **Expiration**: Use `--expiration` (or `-e`) to set expiration time in UTC seconds since Unix epoch
 - **Skip Validation**: Use `--skip-capability-validation` (or `-s`) to skip validation of capabilities against known set
 
@@ -61,7 +62,7 @@ To use custom capabilities not in this list, use the `--skip-capability-validati
 Generate a delegation with basic capabilities:
 ```bash
 mkdelegation gen \
-  -i issuer-key.pem \
+  -k issuer-key.pem \
   -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
   -c "blob/accept" \
   -c "blob/allocate"
@@ -70,7 +71,7 @@ mkdelegation gen \
 Generate a delegation with all capabilities (using wildcard):
 ```bash
 mkdelegation gen \
-  -i issuer-key.pem \
+  -k issuer-key.pem \
   -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
   -c "*/*" \
   -s
@@ -79,7 +80,7 @@ mkdelegation gen \
 Generate a delegation with expiration:
 ```bash
 mkdelegation gen \
-  -i issuer-key.pem \
+  -k issuer-key.pem \
   -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
   -c "assert/equals" \
   -e 1735689600  # Expires on Jan 1, 2025
@@ -88,8 +89,8 @@ mkdelegation gen \
 Generate a delegation with did:web issuer:
 ```bash
 mkdelegation gen \
-  -i issuer-key.pem \
-  -w "did:web:example.com" \
+  -k issuer-key.pem \
+  -i "did:web:example.com" \
   -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
   -c "http/put"
 ```
@@ -118,7 +119,7 @@ cat delegation.b64 | mkdelegation parse
 
 Parse from a generated delegation:
 ```bash
-mkdelegation gen -i key.pem -a did:key:z6Mkh... -c "blob/accept" | mkdelegation parse
+mkdelegation gen -k key.pem -a did:key:z6Mkh... -c "blob/accept" | mkdelegation parse
 ```
 
 Parse with JSON output:
@@ -180,12 +181,12 @@ Generated delegations are output as multibase-base64-encoded CIDv1 with embedded
 
 Generate and immediately parse a delegation:
 ```bash
-mkdelegation gen -i key.pem -a did:key:z6Mkh... -c "blob/accept" | mkdelegation parse
+mkdelegation gen -k key.pem -a did:key:z6Mkh... -c "blob/accept" | mkdelegation parse
 ```
 
 Save a delegation and parse it:
 ```bash
-mkdelegation gen -i key.pem -a did:key:z6Mkh... -c "blob/accept" > my-delegation.b64
+mkdelegation gen -k key.pem -a did:key:z6Mkh... -c "blob/accept" > my-delegation.b64
 mkdelegation parse my-delegation.b64
 ```
 
@@ -193,7 +194,7 @@ mkdelegation parse my-delegation.b64
 
 ### Prerequisites
 
-- Go 1.23 or later
+- Go 1.24 or later
 
 ### Building
 
