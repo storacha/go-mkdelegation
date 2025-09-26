@@ -7,7 +7,7 @@ A Go implementation of UCAN (User Controlled Authorization Networks) delegation 
 Generate a UCAN delegation:
 
 ```bash
-mkdelegation gen -i issuer-key.pem -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK -s -c "*/*"
+mkdelegation gen -f issuer-key.pem -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK -s -c "*/*"
 ```
 
 ## Overview
@@ -33,7 +33,10 @@ The `gen` command creates UCAN delegations from an issuer to an audience with sp
 
 #### Required Parameters
 
-- **Issuer Private Key**: Use `--issuer-private-key` (or `-i`) to specify the path to an Ed25519 private key in PEM format
+- **Issuer Private Key**:
+  - Use `--issuer-private-key-file` (or `-f`) to specify the path to an Ed25519 private key in PEM format
+  - Alternatively, use `--issuer-private-key` (or `-i`) to specify a multibase encoded Ed25519 private key string
+  Only one of these flags can be used at a time, but one of them must be present.
 - **Audience DID**: Use `--audience-did-key` (or `-a`) to specify the audience's DID (must be in did:key format)
 - **Capabilities**: Use `--capabilities` (or `-c`) to specify one or more capabilities to delegate (can be specified multiple times)
 
@@ -61,7 +64,7 @@ To use custom capabilities not in this list, use the `--skip-capability-validati
 Generate a delegation with basic capabilities:
 ```bash
 mkdelegation gen \
-  -i issuer-key.pem \
+  -f issuer-key.pem \
   -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
   -c "blob/accept" \
   -c "blob/allocate"
@@ -70,7 +73,7 @@ mkdelegation gen \
 Generate a delegation with all capabilities (using wildcard):
 ```bash
 mkdelegation gen \
-  -i issuer-key.pem \
+  -i MgCbhJ8TylNGF9UUWCoJd6GYC4IP+XytTMbT3tYO/qMCrzO0B4kR3jQT1Hg7oyvAb77p4JwnzZSFnkYtAonbgxk0ao70= \
   -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
   -c "*/*" \
   -s
@@ -79,7 +82,7 @@ mkdelegation gen \
 Generate a delegation with expiration:
 ```bash
 mkdelegation gen \
-  -i issuer-key.pem \
+  -f issuer-key.pem \
   -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
   -c "assert/equals" \
   -e 1735689600  # Expires on Jan 1, 2025
@@ -88,7 +91,7 @@ mkdelegation gen \
 Generate a delegation with did:web issuer:
 ```bash
 mkdelegation gen \
-  -i issuer-key.pem \
+  -f issuer-key.pem \
   -w "did:web:example.com" \
   -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
   -c "http/put"
@@ -118,7 +121,7 @@ cat delegation.b64 | mkdelegation parse
 
 Parse from a generated delegation:
 ```bash
-mkdelegation gen -i key.pem -a did:key:z6Mkh... -c "blob/accept" | mkdelegation parse
+mkdelegation gen -f issuer-key.pem -a did:key:z6Mkh... -c "blob/accept" | mkdelegation parse
 ```
 
 Parse with JSON output:
@@ -180,12 +183,12 @@ Generated delegations are output as multibase-base64-encoded CIDv1 with embedded
 
 Generate and immediately parse a delegation:
 ```bash
-mkdelegation gen -i key.pem -a did:key:z6Mkh... -c "blob/accept" | mkdelegation parse
+mkdelegation gen -f key.pem -a did:key:z6Mkh... -c "blob/accept" | mkdelegation parse
 ```
 
 Save a delegation and parse it:
 ```bash
-mkdelegation gen -i key.pem -a did:key:z6Mkh... -c "blob/accept" > my-delegation.b64
+mkdelegation gen -f key.pem -a did:key:z6Mkh... -c "blob/accept" > my-delegation.b64
 mkdelegation parse my-delegation.b64
 ```
 
