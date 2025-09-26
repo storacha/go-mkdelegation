@@ -108,7 +108,7 @@ func mkDelegation(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("making delegation: %w", err)
 	}
 
-	out, err := mkd.FormatDelegation(d.Archive())
+	out, err := delegation.Format(d)
 	if err != nil {
 		return fmt.Errorf("formatting delegation: %w", err)
 	}
