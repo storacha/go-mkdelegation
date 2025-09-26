@@ -8,6 +8,7 @@ import (
 	capblob "github.com/storacha/go-libstoracha/capabilities/blob"
 	capreplica "github.com/storacha/go-libstoracha/capabilities/blob/replica"
 	capclaim "github.com/storacha/go-libstoracha/capabilities/claim"
+	"github.com/storacha/go-libstoracha/testutil"
 
 	ed25519 "github.com/storacha/go-ucanto/principal/ed25519/signer"
 	"github.com/stretchr/testify/assert"
@@ -25,6 +26,8 @@ func TestDelegationRoundTrip(t *testing.T) {
 	storageNode, err := ed25519.Generate()
 	require.NoError(t, err)
 
+	someWith := testutil.RandomDID(t).String()
+
 	testCases := []struct {
 		name         string
 		delegFn      func() ([]byte, error)
@@ -33,7 +36,7 @@ func TestDelegationRoundTrip(t *testing.T) {
 		{
 			name: "IndexerToUpload",
 			delegFn: func() ([]byte, error) {
-				deleg, err := MakeDelegation(indexerService, uploadService, []string{capassert.EqualsAbility, capassert.IndexAbility})
+				deleg, err := MakeDelegation(indexerService, uploadService, []string{capassert.EqualsAbility, capassert.IndexAbility}, someWith)
 				if err != nil {
 					return nil, err
 				}
@@ -53,7 +56,7 @@ func TestDelegationRoundTrip(t *testing.T) {
 		{
 			name: "StorageToUpload",
 			delegFn: func() ([]byte, error) {
-				deleg, err := MakeDelegation(storageNode, uploadService, []string{capblob.AllocateAbility, capblob.AcceptAbility, capreplica.AllocateAbility})
+				deleg, err := MakeDelegation(storageNode, uploadService, []string{capblob.AllocateAbility, capblob.AcceptAbility, capreplica.AllocateAbility}, someWith)
 				if err != nil {
 					return nil, err
 				}
@@ -74,7 +77,7 @@ func TestDelegationRoundTrip(t *testing.T) {
 		{
 			name: "IndexerToStorage",
 			delegFn: func() ([]byte, error) {
-				deleg, err := MakeDelegation(indexerService, storageNode, []string{capclaim.CacheAbility})
+				deleg, err := MakeDelegation(indexerService, storageNode, []string{capclaim.CacheAbility}, someWith)
 				if err != nil {
 					return nil, err
 				}

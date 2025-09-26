@@ -16,12 +16,12 @@ import (
 	"github.com/storacha/go-ucanto/ucan"
 )
 
-func MakeDelegation(issuer ucan.Signer, audience ucan.Principal, capabilities []string, opts ...delegation.Option) (delegation.Delegation, error) {
+func MakeDelegation(issuer ucan.Signer, audience ucan.Principal, capabilities []string, with ucan.Resource, opts ...delegation.Option) (delegation.Delegation, error) {
 	uc := make([]ucan.Capability[ucan.NoCaveats], len(capabilities))
 	for i, capability := range capabilities {
 		uc[i] = ucan.NewCapability(
 			capability,
-			issuer.DID().String(),
+			with,
 			ucan.NoCaveats{},
 		)
 	}
