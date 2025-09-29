@@ -1,7 +1,6 @@
 package delegation
 
 import (
-	"io"
 	"testing"
 
 	capassert "github.com/storacha/go-libstoracha/capabilities/assert"
@@ -9,7 +8,9 @@ import (
 	capreplica "github.com/storacha/go-libstoracha/capabilities/blob/replica"
 	capclaim "github.com/storacha/go-libstoracha/capabilities/claim"
 
+	"github.com/storacha/go-ucanto/core/delegation"
 	ed25519 "github.com/storacha/go-ucanto/principal/ed25519/signer"
+	"github.com/storacha/go-ucanto/ucan"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,44 +28,26 @@ func TestDelegationRoundTrip(t *testing.T) {
 
 	testCases := []struct {
 		name         string
-		delegFn      func() ([]byte, error)
+		issuer       ucan.Signer
+		audience     ucan.Principal
+		capabilities []string
 		expectedCaps []string
 	}{
 		{
-			name: "IndexerToUpload",
-			delegFn: func() ([]byte, error) {
-				deleg, err := MakeDelegation(indexerService, uploadService, []string{capassert.EqualsAbility, capassert.IndexAbility})
-				if err != nil {
-					return nil, err
-				}
-
-				bytes, err := io.ReadAll(deleg.Archive())
-				if err != nil {
-					return nil, err
-				}
-
-				return bytes, nil
-			},
+			name:         "IndexerToUpload",
+			issuer:       indexerService,
+			audience:     uploadService,
+			capabilities: []string{capassert.EqualsAbility, capassert.IndexAbility},
 			expectedCaps: []string{
 				capassert.EqualsAbility,
 				capassert.IndexAbility,
 			},
 		},
 		{
-			name: "StorageToUpload",
-			delegFn: func() ([]byte, error) {
-				deleg, err := MakeDelegation(storageNode, uploadService, []string{capblob.AllocateAbility, capblob.AcceptAbility, capreplica.AllocateAbility})
-				if err != nil {
-					return nil, err
-				}
-
-				bytes, err := io.ReadAll(deleg.Archive())
-				if err != nil {
-					return nil, err
-				}
-
-				return bytes, nil
-			},
+			name:         "StorageToUpload",
+			issuer:       storageNode,
+			audience:     uploadService,
+			capabilities: []string{capblob.AllocateAbility, capblob.AcceptAbility, capreplica.AllocateAbility},
 			expectedCaps: []string{
 				capblob.AllocateAbility,
 				capblob.AcceptAbility,
@@ -72,20 +55,10 @@ func TestDelegationRoundTrip(t *testing.T) {
 			},
 		},
 		{
-			name: "IndexerToStorage",
-			delegFn: func() ([]byte, error) {
-				deleg, err := MakeDelegation(indexerService, storageNode, []string{capclaim.CacheAbility})
-				if err != nil {
-					return nil, err
-				}
-
-				bytes, err := io.ReadAll(deleg.Archive())
-				if err != nil {
-					return nil, err
-				}
-
-				return bytes, nil
-			},
+			name:         "IndexerToStorage",
+			issuer:       indexerService,
+			audience:     storageNode,
+			capabilities: []string{capclaim.CacheAbility},
 			expectedCaps: []string{
 				capclaim.CacheAbility,
 			},
@@ -95,16 +68,15 @@ func TestDelegationRoundTrip(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Generate delegation
-			archiveBytes, err := tc.delegFn()
+			deleg, err := MakeDelegation(tc.issuer, tc.audience, tc.capabilities)
 			require.NoError(t, err)
 
-			// Format as base64
-			b64, err := FormatDelegationBytes(archiveBytes)
+			// Format as multibase string
+			dlgStr, err := delegation.Format(deleg)
 			require.NoError(t, err)
-			assert.NotEmpty(t, b64)
 
 			// Parse the delegation
-			info, err := ParseDelegationContent(b64)
+			info, err := ParseDelegationContent(dlgStr)
 			require.NoError(t, err)
 
 			// Verify issuer and audience DIDs
