@@ -18,6 +18,7 @@ import (
 	"github.com/storacha/go-ucanto/core/delegation"
 	"github.com/storacha/go-ucanto/did"
 	"github.com/storacha/go-ucanto/principal"
+	ed25519 "github.com/storacha/go-ucanto/principal/ed25519/signer"
 	"github.com/storacha/go-ucanto/principal/signer"
 
 	mkd "github.com/storacha/go-mkdelegation/pkg/delegation"
@@ -25,6 +26,7 @@ import (
 
 var (
 	// Gen command flags
+	issuerPrivateKeyFile     string
 	issuerPrivateKey         string
 	issuerDidWebKey          string
 	audienceDidKey           string
@@ -45,8 +47,10 @@ var genCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(genCmd)
 
-	genCmd.Flags().StringVarP(&issuerPrivateKey, "issuer-private-key", "i", "", "Path to PEM encoded Ed25519 private key of delegation issuer")
-	Must(genCmd.MarkFlagRequired("issuer-private-key"))
+	genCmd.Flags().StringVarP(&issuerPrivateKeyFile, "issuer-private-key-file", "f", "", "Path to PEM encoded Ed25519 private key of delegation issuer")
+	genCmd.Flags().StringVarP(&issuerPrivateKey, "issuer-private-key", "i", "", "Multibase encoded Ed25519 private key of delegation issuer")
+	genCmd.MarkFlagsMutuallyExclusive("issuer-private-key-file", "issuer-private-key")
+	genCmd.MarkFlagsOneRequired("issuer-private-key-file", "issuer-private-key")
 
 	genCmd.Flags().StringVarP(&issuerDidWebKey, "issuer-did-web", "w", "", "Optional did:web: of issuer, when provided warps did:key: of delegation issuer")
 
@@ -60,9 +64,19 @@ func init() {
 }
 
 func mkDelegation(cmd *cobra.Command, args []string) error {
-	issuer, err := parseIssuerKey(issuerPrivateKey)
-	if err != nil {
-		return fmt.Errorf("parsing issuer private key from file %s: %w", issuerPrivateKey, err)
+	var issuer principal.Signer
+	if issuerPrivateKeyFile != "" {
+		var err error
+		issuer, err = parseIssuerKey(issuerPrivateKeyFile)
+		if err != nil {
+			return fmt.Errorf("parsing issuer private key from file %s: %w", issuerPrivateKeyFile, err)
+		}
+	} else {
+		var err error
+		issuer, err = ed25519.Parse(issuerPrivateKey)
+		if err != nil {
+			return fmt.Errorf("parsing issuer private key: %w", err)
+		}
 	}
 
 	if issuerDidWebKey != "" {
