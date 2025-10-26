@@ -35,14 +35,15 @@ The `gen` command creates UCAN delegations from an issuer to an audience with sp
 
 - **Issuer Private Key**:
   - Use `--issuer-private-key-file` (or `-f`) to specify the path to an Ed25519 private key in PEM format
-  - Alternatively, use `--issuer-private-key` (or `-i`) to specify a multibase encoded Ed25519 private key string
+  - Alternatively, use `--issuer-private-key` (or `-k`) to specify a multibase encoded Ed25519 private key string
   Only one of these flags can be used at a time, but one of them must be present.
 - **Audience DID**: Use `--audience-did-key` (or `-a`) to specify the audience's DID (must be in did:key format)
 - **Capabilities**: Use `--capabilities` (or `-c`) to specify one or more capabilities to delegate (can be specified multiple times)
 
 #### Optional Parameters
 
-- **Issuer DID Web**: Use `--issuer-did-web` (or `-w`) to wrap the issuer with a did:web identity
+- **Issuer DID Web**: Use `--issuer-did-web` (or `-i`) to wrap the issuer with a did:web identity
+- **With**: Use `--with` (or `-w`) to specify the resource delegated capabilities apply to
 - **Expiration**: Use `--expiration` (or `-e`) to set expiration time in UTC seconds since Unix epoch
 - **Skip Validation**: Use `--skip-capability-validation` (or `-s`) to skip validation of capabilities against known set
 
@@ -73,7 +74,7 @@ mkdelegation gen \
 Generate a delegation with all capabilities (using wildcard):
 ```bash
 mkdelegation gen \
-  -i MgCbhJ8TylNGF9UUWCoJd6GYC4IP+XytTMbT3tYO/qMCrzO0B4kR3jQT1Hg7oyvAb77p4JwnzZSFnkYtAonbgxk0ao70= \
+  -k MgCbhJ8TylNGF9UUWCoJd6GYC4IP+XytTMbT3tYO/qMCrzO0B4kR3jQT1Hg7oyvAb77p4JwnzZSFnkYtAonbgxk0ao70= \
   -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
   -c "*/*" \
   -s
@@ -92,7 +93,7 @@ Generate a delegation with did:web issuer:
 ```bash
 mkdelegation gen \
   -f issuer-key.pem \
-  -w "did:web:example.com" \
+  -i "did:web:example.com" \
   -a did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK \
   -c "http/put"
 ```
@@ -196,7 +197,7 @@ mkdelegation parse my-delegation.b64
 
 ### Prerequisites
 
-- Go 1.23 or later
+- Go 1.24 or later
 
 ### Building
 

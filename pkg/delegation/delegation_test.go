@@ -7,6 +7,7 @@ import (
 	capblob "github.com/storacha/go-libstoracha/capabilities/blob"
 	capreplica "github.com/storacha/go-libstoracha/capabilities/blob/replica"
 	capclaim "github.com/storacha/go-libstoracha/capabilities/claim"
+	"github.com/storacha/go-libstoracha/testutil"
 
 	"github.com/storacha/go-ucanto/core/delegation"
 	ed25519 "github.com/storacha/go-ucanto/principal/ed25519/signer"
@@ -25,6 +26,8 @@ func TestDelegationRoundTrip(t *testing.T) {
 
 	storageNode, err := ed25519.Generate()
 	require.NoError(t, err)
+
+	someWith := testutil.RandomDID(t).String()
 
 	testCases := []struct {
 		name         string
@@ -68,7 +71,7 @@ func TestDelegationRoundTrip(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Generate delegation
-			deleg, err := MakeDelegation(tc.issuer, tc.audience, tc.capabilities)
+			deleg, err := MakeDelegation(tc.issuer, tc.audience, tc.capabilities, someWith)
 			require.NoError(t, err)
 
 			// Format as multibase string
